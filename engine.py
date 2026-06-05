@@ -2,58 +2,92 @@
 ai-token-burn — usage aggregation engine.
 
 `compute_claude()` is a clean-room reimplementation of the Claude desktop app's
-/stats engine ("What's up next" panel). It has been validated byte-for-byte against
-the app's actual extracted code on a frozen snapshot of the logs: Sessions, Messages,
-Active days, Total tokens, every per-model in/out/cache figure, Peak hour, both
-streaks, first/last session date, Favorite model, and the daily token heatmap all
-match exactly. (The app's internal `toolCallCount` is FS-order-dependent and not
-shown in the panel, so it is intentionally not reproduced.)
+/stats engine ("What's up next" panel), validated byte-for-byte against the app's
+actual extracted code (see tools/verify_against_app.py): Sessions, Messages, Active
+days, Total tokens, every per-model in/out/cache figure, Peak hour, both streaks,
+first/last session date, Favorite model, and the daily token heatmap all match.
+(The app's internal `toolCallCount` is FS-order-dependent and not shown in the panel,
+so it is intentionally not reproduced.)
 
-Key fidelity details:
-  * tokens reported in the headline EXCLUDE cache (input+output only); cache read/
-    creation are tracked separately.
+Fidelity notes:
+  * tokens reported in the headline EXCLUDE cache (input+output only).
   * a "session" is a non-subagent transcript with >=1 non-sidechain user/assistant
-    message, dated by its first message's LOCAL date.
-  * subagent transcripts (<session>/subagents/agent-*.jsonl) contribute tokens but
-    never sessions/messages/active-days — here we also keep them in a SEPARATE bucket
-    so a dashboard can toggle them on/off.
-  * lines are split on \\r\\n | \\r | \\n | U+2028 | U+2029 to mirror Node's readline
-    (the app silently drops records containing U+2028/U+2029, so we must too).
+    message, dated by its first message's LOCAL date — so this must run on the user's
+    machine (same timezone as the app), which is exactly where the launchd job runs.
+  * subagent transcripts contribute tokens but never sessions/messages/active-days/
+    streaks (kept in a separate bucket so a dashboard can toggle them on).
+  * line-splitting for Claude matches Node's readline including U+2028/U+2029 (the app
+    silently drops records containing them). Codex has no such app to mirror, so it
+    uses standard JSONL splitting.
+  * JSON parsing rejects NaN/Infinity exactly like JS `JSON.parse` does.
 """
 from __future__ import annotations
+import json
 import os
 import re
-import json
 from datetime import datetime, timedelta
 
 SYNTHETIC = "<synthetic>"
-# Node's readline line boundaries — NOT just \n/\r. U+2028/U+2029 matter (see module docstring).
-_LINE_SPLIT = re.compile("\\r\\n|\\r|\\n|\\u2028|\\u2029")
+# Claude only: U+2028/U+2029 must split lines (Node readline does; the app drops such
+# records). \r\n|\r|\n are already handled by Python's universal-newline file iteration.
+_CLAUDE_EXTRA_SPLIT = re.compile("[\u2028\u2029]")
 
 
-def _parse_jsonl(path: str) -> list[dict]:
-    """Read a transcript exactly like the app's `cKr` (Node readline + JSON.parse)."""
+def _reject_nonfinite(_value):
+    """Make json.loads reject NaN/Infinity/-Infinity, matching JS JSON.parse."""
+    raise ValueError("non-finite JSON constant")
+
+
+def _int(value) -> int:
+    """Coerce a token field to a non-negative int; anything weird becomes 0.
+
+    Guards against strings/floats/NaN/None/negative junk in malformed logs poisoning the
+    totals or crashing `+=`. Real token fields are always ints, so this is a no-op on
+    valid data.
+    """
+    return value if type(value) is int and value >= 0 else 0
+
+
+def _parse_jsonl(path: str, extra_split: "re.Pattern | None") -> list[dict]:
+    """Stream a transcript line-by-line and return its JSON object records.
+
+    Memory is bounded by the longest line, not the file size. Non-object JSON values
+    (`[]`, `null`, `"x"`) and NaN/Infinity-bearing lines are skipped, not crashed on.
+    """
+    out: list[dict] = []
     try:
-        raw = open(path, encoding="utf-8", errors="replace", newline="").read()
+        fh = open(path, encoding="utf-8", errors="replace", newline="")
     except OSError:
-        return []
-    out = []
-    for line in _LINE_SPLIT.split(raw):
-        if line:
-            try:
-                out.append(json.loads(line))
-            except ValueError:
-                pass
+        return out
+    with fh:
+        for line in fh:  # universal newlines: splits on \n, \r, \r\n
+            pieces = extra_split.split(line) if extra_split else (line,)
+            for piece in pieces:
+                piece = piece.strip()
+                if not piece:
+                    continue
+                try:
+                    obj = json.loads(piece, parse_constant=_reject_nonfinite)
+                except ValueError:
+                    continue
+                if isinstance(obj, dict):
+                    out.append(obj)
     return out
 
 
-def _local_date_hour(ts: str) -> tuple[str, int]:
+def _local_date_hour(ts) -> tuple[str, int]:
+    """Local YYYY-MM-DD and hour for an ISO timestamp. Raises ValueError on junk."""
+    if not isinstance(ts, str):
+        raise ValueError("non-string timestamp")
     dt = datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone()
     return dt.strftime("%Y-%m-%d"), dt.hour
 
 
 def _claude_transcripts(projects_dir: str) -> list[str]:
-    """Mirror of the app's `gKr`: project/*.jsonl + project/<session>/subagents/agent-*.jsonl."""
+    """Mirror of the app's `gKr`: project/*.jsonl + project/<session>/subagents/agent-*.jsonl.
+
+    Sorted for deterministic output; unreadable subtrees are skipped, not fatal.
+    """
     files: list[str] = []
     try:
         projects = os.listdir(projects_dir)
@@ -63,19 +97,34 @@ def _claude_transcripts(projects_dir: str) -> list[str]:
         pdir = os.path.join(projects_dir, proj)
         if not os.path.isdir(pdir):
             continue
-        for name in os.listdir(pdir):
+        try:
+            names = os.listdir(pdir)
+        except OSError:
+            continue
+        for name in names:
             full = os.path.join(pdir, name)
             if os.path.isfile(full) and name.endswith(".jsonl"):
                 files.append(full)
             elif os.path.isdir(full):
                 sub = os.path.join(full, "subagents")
-                if os.path.isdir(sub):
-                    files += [
-                        os.path.join(sub, x)
-                        for x in os.listdir(sub)
-                        if x.endswith(".jsonl") and x.startswith("agent-")
-                    ]
-    return files
+                try:
+                    subs = os.listdir(sub)
+                except OSError:
+                    continue
+                files += [
+                    os.path.join(sub, x) for x in subs
+                    if x.endswith(".jsonl") and x.startswith("agent-")
+                ]
+    return sorted(files)
+
+
+def _codex_rollouts(sessions_dir: str) -> list[str]:
+    out: list[str] = []
+    for root, _dirs, files in os.walk(sessions_dir):
+        for n in files:
+            if n.startswith("rollout-") and n.endswith(".jsonl"):
+                out.append(os.path.join(root, n))
+    return sorted(out)
 
 
 def _streaks(active_dates: set[str]) -> dict:
@@ -100,32 +149,51 @@ def _streaks(active_dates: set[str]) -> dict:
     return {"currentStreak": cur, "longestStreak": max(longest, run)}
 
 
+def _peak_hour(hour_counts: dict) -> "int | None":
+    """Most common hour; ties broken deterministically by the lower hour (the app breaks
+    ties by FS-enumeration order, which isn't reproducible — we prefer a stable result)."""
+    best, best_count = None, 0
+    for h in sorted(hour_counts):
+        if hour_counts[h] > best_count:
+            best_count, best = hour_counts[h], h
+    return best
+
+
 def _new_model_bucket() -> dict:
     return {"inputTokens": 0, "outputTokens": 0, "cacheReadInputTokens": 0, "cacheCreationInputTokens": 0}
+
+
+def _models_list(usage: dict) -> list[dict]:
+    total = sum(v["inputTokens"] + v["outputTokens"] for v in usage.values()) or 1
+    rows = [{
+        "model": m, "in": v["inputTokens"], "out": v["outputTokens"],
+        "cacheRead": v["cacheReadInputTokens"], "cacheCreation": v["cacheCreationInputTokens"],
+        "total": v["inputTokens"] + v["outputTokens"],
+        "pct": round(100 * (v["inputTokens"] + v["outputTokens"]) / total, 1),
+    } for m, v in usage.items()]
+    return sorted(rows, key=lambda r: (-r["total"], r["model"]))  # stable, deterministic
 
 
 def compute_claude(claude_dir: str | None = None, since_days: int | None = None) -> dict:
     """Aggregate Claude Code usage. `since_days` caps history (None = all on disk)."""
     claude_dir = claude_dir or os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude")
     projects = os.path.join(claude_dir, "projects")
-    floor = None
-    if since_days is not None:
-        floor = (datetime.now().astimezone() - timedelta(days=since_days)).strftime("%Y-%m-%d")
+    floor = ((datetime.now().astimezone() - timedelta(days=since_days)).strftime("%Y-%m-%d")
+             if since_days is not None else None)
     sub_marker = f"{os.sep}subagents{os.sep}"
 
-    sessions = messages = 0
-    sub_sessions = sub_messages = 0
+    sessions = messages = sub_sessions = sub_messages = 0
     first_ts = last_ts = None
-    hour_order: list[int] = []
     hour_counts: dict[int, int] = {}
     model_usage: dict[str, dict] = {}        # app-identical (includes subagent tokens)
     model_usage_sub: dict[str, dict] = {}    # subagent-only portion
-    daily: dict[str, dict] = {}              # date -> {messages, sessions, subMessages, subSessions}
-    daily_model: dict[str, dict] = {}        # date -> {model: in+out}  (app-identical)
+    daily_act: dict[str, dict] = {}          # date -> {messages, sessions}  (non-subagent → activeDays/streaks)
+    daily_sub: dict[str, dict] = {}          # date -> {messages, sessions}  (subagent only)
+    daily_model: dict[str, dict] = {}        # date -> {model: in+out}       (app-identical, incl subagent)
     daily_model_sub: dict[str, dict] = {}    # subagent-only
 
     for path in _claude_transcripts(projects):
-        entries = _parse_jsonl(path)
+        entries = _parse_jsonl(path, _CLAUDE_EXTRA_SPLIT)
         msgs = [e for e in entries if e.get("type") in ("user", "assistant")]
         if not msgs:
             continue
@@ -133,27 +201,26 @@ def compute_claude(claude_dir: str | None = None, since_days: int | None = None)
         kept = msgs if is_sub else [e for e in msgs if not e.get("isSidechain")]
         if not kept:
             continue
-        ts0 = kept[0].get("timestamp") or ""
+        ts0 = kept[0].get("timestamp")
         try:
             date, hour = _local_date_hour(ts0)
-        except ValueError:
+        except (ValueError, TypeError):
             continue
         if floor is not None and date < floor:
             continue
 
-        day = daily.setdefault(date, {"messages": 0, "sessions": 0, "subMessages": 0, "subSessions": 0})
         if is_sub:
             sub_sessions += 1
             sub_messages += len(kept)
-            day["subSessions"] += 1
-            day["subMessages"] += len(kept)
+            d = daily_sub.setdefault(date, {"messages": 0, "sessions": 0})
+            d["messages"] += len(kept)
+            d["sessions"] += 1
         else:
             sessions += 1
             messages += len(kept)
-            day["sessions"] += 1
-            day["messages"] += len(kept)
-            if hour not in hour_counts:
-                hour_order.append(hour)
+            d = daily_act.setdefault(date, {"messages": 0, "sessions": 0})
+            d["messages"] += len(kept)
+            d["sessions"] += 1
             hour_counts[hour] = hour_counts.get(hour, 0) + 1
             if first_ts is None or ts0 < first_ts:
                 first_ts = ts0
@@ -164,59 +231,48 @@ def compute_claude(claude_dir: str | None = None, since_days: int | None = None)
             if e.get("type") != "assistant":
                 continue
             usage = (e.get("message") or {}).get("usage")
-            if not usage:
+            if not isinstance(usage, dict):
                 continue
             model = (e.get("message") or {}).get("model") or "unknown"
             if model == SYNTHETIC:
                 continue
+            i, o = _int(usage.get("input_tokens")), _int(usage.get("output_tokens"))
+            cr, cc = _int(usage.get("cache_read_input_tokens")), _int(usage.get("cache_creation_input_tokens"))
             bucket = model_usage.setdefault(model, _new_model_bucket())
-            bucket["inputTokens"] += usage.get("input_tokens", 0) or 0
-            bucket["outputTokens"] += usage.get("output_tokens", 0) or 0
-            bucket["cacheReadInputTokens"] += usage.get("cache_read_input_tokens", 0) or 0
-            bucket["cacheCreationInputTokens"] += usage.get("cache_creation_input_tokens", 0) or 0
-            burn = (usage.get("input_tokens", 0) or 0) + (usage.get("output_tokens", 0) or 0)
+            bucket["inputTokens"] += i
+            bucket["outputTokens"] += o
+            bucket["cacheReadInputTokens"] += cr
+            bucket["cacheCreationInputTokens"] += cc
+            burn = i + o
             if burn > 0:
                 daily_model.setdefault(date, {})
                 daily_model[date][model] = daily_model[date].get(model, 0) + burn
             if is_sub:
                 sb = model_usage_sub.setdefault(model, _new_model_bucket())
-                sb["inputTokens"] += usage.get("input_tokens", 0) or 0
-                sb["outputTokens"] += usage.get("output_tokens", 0) or 0
-                sb["cacheReadInputTokens"] += usage.get("cache_read_input_tokens", 0) or 0
-                sb["cacheCreationInputTokens"] += usage.get("cache_creation_input_tokens", 0) or 0
+                sb["inputTokens"] += i
+                sb["outputTokens"] += o
+                sb["cacheReadInputTokens"] += cr
+                sb["cacheCreationInputTokens"] += cc
                 if burn > 0:
                     daily_model_sub.setdefault(date, {})
                     daily_model_sub[date][model] = daily_model_sub[date].get(model, 0) + burn
 
-    peak_hour, best = None, 0
-    for h in hour_order:
-        if hour_counts[h] > best:
-            best, peak_hour = hour_counts[h], h
-
-    def models_list(usage: dict) -> list[dict]:
-        total = sum(v["inputTokens"] + v["outputTokens"] for v in usage.values()) or 1
-        rows = []
-        for m, v in usage.items():
-            io = v["inputTokens"] + v["outputTokens"]
-            rows.append({
-                "model": m, "in": v["inputTokens"], "out": v["outputTokens"],
-                "cacheRead": v["cacheReadInputTokens"], "cacheCreation": v["cacheCreationInputTokens"],
-                "total": io, "pct": round(100 * io / total, 1),
-            })
-        return sorted(rows, key=lambda r: -r["total"])
-
+    # Active days / streaks count NON-subagent days only (matches the app's `r` set).
+    active = set(daily_act)
+    models = _models_list(model_usage)
     total_tokens = sum(v["inputTokens"] + v["outputTokens"] for v in model_usage.values())
-    models = models_list(model_usage)
+
+    all_dates = sorted(set(daily_act) | set(daily_sub) | set(daily_model) | set(daily_model_sub))
     daily_rows = [{
         "date": d,
         "tokens": sum(daily_model.get(d, {}).values()),
         "byModel": daily_model.get(d, {}),
-        "messages": daily[d]["messages"],
-        "sessions": daily[d]["sessions"],
+        "messages": daily_act.get(d, {}).get("messages", 0),
+        "sessions": daily_act.get(d, {}).get("sessions", 0),
         "subTokens": sum(daily_model_sub.get(d, {}).values()),
-        "subMessages": daily[d]["subMessages"],
-        "subSessions": daily[d]["subSessions"],
-    } for d in sorted(daily)]
+        "subMessages": daily_sub.get(d, {}).get("messages", 0),
+        "subSessions": daily_sub.get(d, {}).get("sessions", 0),
+    } for d in all_dates]
 
     return {
         "tool": "claude",
@@ -224,12 +280,12 @@ def compute_claude(claude_dir: str | None = None, since_days: int | None = None)
             "sessions": sessions,
             "messages": messages,
             "totalTokens": total_tokens,
-            "activeDays": len(daily),
-            "peakHour": peak_hour,
+            "activeDays": len(active),
+            "peakHour": _peak_hour(hour_counts),
             "favoriteModel": models[0]["model"] if models else None,
             "firstSessionDate": first_ts,
             "lastSessionDate": last_ts,
-            **_streaks(set(daily)),
+            **_streaks(active),
         },
         "models": models,
         "daily": daily_rows,
@@ -238,55 +294,47 @@ def compute_claude(claude_dir: str | None = None, since_days: int | None = None)
             "sessions": sub_sessions,
             "messages": sub_messages,
             "totalTokens": sum(v["inputTokens"] + v["outputTokens"] for v in model_usage_sub.values()),
-            "models": models_list(model_usage_sub),
+            "models": _models_list(model_usage_sub),
         },
     }
-
-
-def _codex_rollouts(sessions_dir: str) -> list[str]:
-    out: list[str] = []
-    for root, _dirs, files in os.walk(sessions_dir):
-        for n in files:
-            if n.startswith("rollout-") and n.endswith(".jsonl"):
-                out.append(os.path.join(root, n))
-    return out
 
 
 def compute_codex(codex_dir: str | None = None, since_days: int | None = None) -> dict:
     """Aggregate OpenAI Codex CLI usage from ~/.codex/sessions/**/rollout-*.jsonl.
 
-    Codex resends full context each turn, so per-event `last_token_usage` is not a
-    clean delta — the authoritative session total is the FINAL `total_token_usage`.
-    To stay comparable with Claude's cache-excluded headline:
+    Codex resends full context each turn, so per-event `last_token_usage` is not a clean
+    delta — the authoritative session total is the `token_count` event with the largest
+    cumulative `total_tokens` (robust to out-of-order/appended events). Codex's own
+    `total_tokens` == input + output (reasoning is reported separately and excluded), so
+    to mirror Claude's cache-excluded headline:
         in  = input_tokens - cached_input_tokens   (non-cached input)
-        out = output_tokens + reasoning_output_tokens
+        out = output_tokens                         (reasoning excluded, matching total_tokens)
         cacheRead = cached_input_tokens
+    Sessions are single-model in practice (verified across all rollouts); tokens are
+    attributed to the session's model.
     """
     codex_dir = codex_dir or os.environ.get("CODEX_HOME") or os.path.expanduser("~/.codex")
     sessions_dir = os.path.join(codex_dir, "sessions")
-    floor = None
-    if since_days is not None:
-        floor = (datetime.now().astimezone() - timedelta(days=since_days)).strftime("%Y-%m-%d")
+    floor = ((datetime.now().astimezone() - timedelta(days=since_days)).strftime("%Y-%m-%d")
+             if since_days is not None else None)
 
     sessions = messages = 0
     first_ts = last_ts = None
-    hour_order: list[int] = []
     hour_counts: dict[int, int] = {}
     model_usage: dict[str, dict] = {}
     daily: dict[str, dict] = {}
     daily_model: dict[str, dict] = {}
 
     for path in _codex_rollouts(sessions_dir):
-        entries = _parse_jsonl(path)
+        entries = _parse_jsonl(path, None)  # standard JSONL — no U+2028/U+2029 splitting
         if not entries:
             continue
-        sess_first = None
-        model = None
+        sess_first = model = None
         umsg = amsg = 0
-        final_total = None
+        best_total, best_total_val = None, -1
         for o in entries:
             ts = o.get("timestamp")
-            if ts and sess_first is None:
+            if sess_first is None and isinstance(ts, str):
                 sess_first = ts
             payload = o.get("payload") or {}
             etype = o.get("type")
@@ -302,13 +350,15 @@ def compute_codex(codex_dir: str | None = None, since_days: int | None = None) -
                     amsg += 1
                 elif pt == "token_count":
                     tot = (payload.get("info") or {}).get("total_token_usage")
-                    if tot:
-                        final_total = tot
-        if sess_first is None or (umsg + amsg == 0 and not final_total):
+                    if isinstance(tot, dict):
+                        tv = _int(tot.get("total_tokens"))
+                        if tv >= best_total_val:
+                            best_total_val, best_total = tv, tot
+        if umsg + amsg == 0:  # require >=1 message, matching the Claude session rule
             continue
         try:
             date, hour = _local_date_hour(sess_first)
-        except ValueError:
+        except (ValueError, TypeError):
             continue
         if floor is not None and date < floor:
             continue
@@ -316,21 +366,19 @@ def compute_codex(codex_dir: str | None = None, since_days: int | None = None) -
 
         sessions += 1
         messages += umsg + amsg
-        day = daily.setdefault(date, {"messages": 0, "sessions": 0})
-        day["sessions"] += 1
-        day["messages"] += umsg + amsg
-        if hour not in hour_counts:
-            hour_order.append(hour)
+        d = daily.setdefault(date, {"messages": 0, "sessions": 0})
+        d["sessions"] += 1
+        d["messages"] += umsg + amsg
         hour_counts[hour] = hour_counts.get(hour, 0) + 1
         if first_ts is None or sess_first < first_ts:
             first_ts = sess_first
         if last_ts is None or sess_first > last_ts:
             last_ts = sess_first
 
-        if final_total:
-            cached = final_total.get("cached_input_tokens", 0) or 0
-            in_nc = max((final_total.get("input_tokens", 0) or 0) - cached, 0)
-            out = (final_total.get("output_tokens", 0) or 0) + (final_total.get("reasoning_output_tokens", 0) or 0)
+        if best_total:
+            cached = _int(best_total.get("cached_input_tokens"))
+            in_nc = max(_int(best_total.get("input_tokens")) - cached, 0)
+            out = _int(best_total.get("output_tokens"))
             bucket = model_usage.setdefault(model, _new_model_bucket())
             bucket["inputTokens"] += in_nc
             bucket["outputTokens"] += out
@@ -340,28 +388,15 @@ def compute_codex(codex_dir: str | None = None, since_days: int | None = None) -
                 daily_model.setdefault(date, {})
                 daily_model[date][model] = daily_model[date].get(model, 0) + burn
 
-    peak_hour, best = None, 0
-    for h in hour_order:
-        if hour_counts[h] > best:
-            best, peak_hour = hour_counts[h], h
-
-    total = sum(v["inputTokens"] + v["outputTokens"] for v in model_usage.values()) or 1
-    models = sorted(
-        ({
-            "model": m, "in": v["inputTokens"], "out": v["outputTokens"],
-            "cacheRead": v["cacheReadInputTokens"], "cacheCreation": 0,
-            "total": v["inputTokens"] + v["outputTokens"],
-            "pct": round(100 * (v["inputTokens"] + v["outputTokens"]) / total, 1),
-        } for m, v in model_usage.items()),
-        key=lambda r: -r["total"],
-    )
+    models = _models_list(model_usage)
+    all_dates = sorted(set(daily) | set(daily_model))
     daily_rows = [{
         "date": d,
         "tokens": sum(daily_model.get(d, {}).values()),
         "byModel": daily_model.get(d, {}),
-        "messages": daily[d]["messages"],
-        "sessions": daily[d]["sessions"],
-    } for d in sorted(daily)]
+        "messages": daily.get(d, {}).get("messages", 0),
+        "sessions": daily.get(d, {}).get("sessions", 0),
+    } for d in all_dates]
 
     return {
         "tool": "codex",
@@ -370,7 +405,7 @@ def compute_codex(codex_dir: str | None = None, since_days: int | None = None) -
             "messages": messages,
             "totalTokens": sum(v["inputTokens"] + v["outputTokens"] for v in model_usage.values()),
             "activeDays": len(daily),
-            "peakHour": peak_hour,
+            "peakHour": _peak_hour(hour_counts),
             "favoriteModel": models[0]["model"] if models else None,
             "firstSessionDate": first_ts,
             "lastSessionDate": last_ts,

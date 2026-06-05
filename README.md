@@ -59,5 +59,3 @@ python3 collect.py --out x.json    # custom path
 - [ ] GitHub Pages dashboard: tabs (Claude ⇄ Codex) + All/30d/7d + Overview/Models + subagent toggle
 - [ ] GitHub Action: render hero on push
 - [ ] launchd job: daily `collect.py` → commit + push
-
-See [`docs/prompts/token-burn-graph-plan.md`](docs/prompts/token-burn-graph-plan.md).

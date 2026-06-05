@@ -15,3 +15,6 @@ extracted-app/
 # OS / editor
 .DS_Store
 node_modules/
+
+# Local working notes — not for the public repo
+docs/prompts/

@@ -25,9 +25,15 @@ def main() -> None:
         "codex": engine.compute_codex(args.codex_dir),
     }
 
-    os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
-    with open(args.out, "w") as fh:
-        json.dump(stats, fh, indent=2)
+    # Atomic write: dump to a temp file in the same dir (allow_nan=False guarantees the
+    # output is valid JSON for every consumer), then os.replace so an interrupted run
+    # never leaves the profile graph reading a truncated file.
+    out_dir = os.path.dirname(args.out) or "."
+    os.makedirs(out_dir, exist_ok=True)
+    tmp = f"{args.out}.tmp"
+    with open(tmp, "w") as fh:
+        json.dump(stats, fh, indent=2, allow_nan=False)
+    os.replace(tmp, args.out)
 
     for tool in ("claude", "codex"):
         o = stats[tool]["overview"]

@@ -41,7 +41,13 @@ def build_oracle(workdir: str) -> str:
                    check=True, capture_output=True)
     data = open(os.path.join(app, ".vite/build/index.js"), errors="replace").read()
     # The /stats helpers are contiguous: from `const oKr="<synthetic>"` to just before EKr ends.
-    slab = data[data.index('const oKr="<synthetic>"'):data.index("let LV=null,ceA=null")]
+    try:
+        start = data.index('const oKr="<synthetic>"')
+        end = data.index("let LV=null,ceA=null")
+    except ValueError:
+        sys.exit("Could not locate the /stats engine markers in this Claude version — "
+                 "the extractor needs updating for this release (a controlled failure, not a crash).")
+    slab = data[start:end]
     if "function EKr(" not in slab:
         sys.exit("Could not locate EKr in this Claude version — the engine may need updating.")
     slab = slab.replace("const e=await aKr()", "const e=null", 1)  # force full recompute, ignore cache
@@ -84,16 +90,32 @@ def main() -> int:
         eq("totalTokens", ov["totalTokens"], app_total)
 
         ours_mu = {m["model"]: m for m in mine["models"]}
+        # Symmetric model set — catch extra/missing models, not just per-model values.
+        eq("model set", sorted(ours_mu), sorted(app_stats["modelUsage"]))
         for model, v in app_stats["modelUsage"].items():
             m = ours_mu.get(model, {})
             eq(f"{model}.in", m.get("in"), v["inputTokens"])
             eq(f"{model}.out", m.get("out"), v["outputTokens"])
             eq(f"{model}.cacheRead", m.get("cacheRead"), v["cacheReadInputTokens"])
             eq(f"{model}.cacheCreation", m.get("cacheCreation"), v["cacheCreationInputTokens"])
+        app_fav = (max(app_stats["modelUsage"],
+                       key=lambda k: app_stats["modelUsage"][k]["inputTokens"] + app_stats["modelUsage"][k]["outputTokens"])
+                   if app_stats["modelUsage"] else None)
+        eq("favoriteModel", ov["favoriteModel"], app_fav)
 
-        ours_daily = {d["date"]: d["byModel"] for d in mine["daily"]}
+        # Daily token heatmap — values AND date coverage (symmetric).
+        ours_by_date = {d["date"]: d for d in mine["daily"]}
         for d in app_stats["dailyModelTokens"]:
-            eq(f"daily {d['date']}", ours_daily.get(d["date"]), d["tokensByModel"])
+            eq(f"daily tokens {d['date']}", ours_by_date.get(d["date"], {}).get("byModel"), d["tokensByModel"])
+        eq("dailyModelTokens date set",
+           sorted(d["date"] for d in mine["daily"] if d["byModel"]),
+           sorted(d["date"] for d in app_stats["dailyModelTokens"]))
+
+        # Daily activity (messages/sessions), which the SVG/dashboard also render.
+        for da in app_stats["dailyActivity"]:
+            row = ours_by_date.get(da["date"], {})
+            eq(f"daily messages {da['date']}", row.get("messages"), da["messageCount"])
+            eq(f"daily sessions {da['date']}", row.get("sessions"), da["sessionCount"])
 
         if fails:
             print(f"❌ MISMATCH ({len(fails)}):")
