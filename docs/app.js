@@ -150,7 +150,12 @@ function quartiles(values) {
 function renderHeatmap(M) {
   const root = $('#heatmap'); root.innerHTML = '';
   const wd = M.wd;
-  if (!wd.length) return;
+  if (!wd.length) {
+    // idle tool in this window: clear the subtitle + legend too, not just cells
+    $('#heatmap-sub').textContent = 'no activity in this window';
+    $('#legend').innerHTML = '';
+    return;
+  }
   const byDate = {}; for (const d of wd) byDate[d.date] = d;
   const first = wd[0].date, last = wd[wd.length - 1].date;
   const firstSun = addDays(parseDay(first), -parseDay(first).getUTCDay());
