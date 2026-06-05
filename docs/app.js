@@ -144,17 +144,27 @@ function renderHeatmap(M) {
   const level = quartiles(wd.map(d => d.tokens));
   $('#heatmap-sub').textContent = `${humanTokens(M.tokens)} tokens · ${M.activeDays} active days`;
 
-  let lastLabel = -3;
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  // Month labels: one per month present, at that month's first column. Drop a
+  // partial leading month only if it would crowd the next label; keep a 2-column
+  // min gap so labels never overlap. (Handles short ranges like the 6-week Claude
+  // span, where the old "column starts in days 1-7" rule labelled only May.)
+  const monthStarts = [];
+  for (let w = 0, seen = -1; w < nWeeks; w++) {
+    const m = addDays(firstSun, w * 7).getUTCMonth();
+    if (m !== seen) { monthStarts.push([w, m]); seen = m; }
+  }
+  const labelAt = {};
+  for (let i = 0, lastPlaced = -99; i < monthStarts.length; i++) {
+    const [w, m] = monthStarts[i];
+    const nxt = i + 1 < monthStarts.length ? monthStarts[i + 1][0] : nWeeks;
+    if (w === 0 && nxt < 2) continue;     // partial leading month crowds the next
+    if (w - lastPlaced < 2) continue;     // too close to the previous label
+    labelAt[w] = MONTHS[m];
+    lastPlaced = w;
+  }
   for (let w = 0; w < nWeeks; w++) {
-    const colStart = addDays(firstSun, w * 7);
-    // month label (drop partial leading + keep min gap)
-    let lbl = '';
-    const firstOfMonthInCol = colStart.getUTCDate() <= 7;
-    if (firstOfMonthInCol && w - lastLabel >= 3 && !(w === 0 && colStart.getUTCDate() > 1)) {
-      lbl = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][colStart.getUTCMonth()];
-      lastLabel = w;
-    }
-    root.appendChild(el('div', 'mlabel', lbl));
+    root.appendChild(el('div', 'mlabel', labelAt[w] || ''));
     for (let row = 0; row < 7; row++) {
       const day = addDays(firstSun, w * 7 + row), ds = iso(day);
       const cell = el('div', 'cell');
