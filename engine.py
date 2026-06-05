@@ -176,7 +176,7 @@ def _models_list(usage: dict) -> list[dict]:
 
 def compute_claude(claude_dir: str | None = None, since_days: int | None = None) -> dict:
     """Aggregate Claude Code usage. `since_days` caps history (None = all on disk)."""
-    claude_dir = claude_dir or os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude")
+    claude_dir = os.path.expanduser(claude_dir or os.environ.get("CLAUDE_CONFIG_DIR") or "~/.claude")
     projects = os.path.join(claude_dir, "projects")
     floor = ((datetime.now().astimezone() - timedelta(days=since_days)).strftime("%Y-%m-%d")
              if since_days is not None else None)
@@ -313,7 +313,7 @@ def compute_codex(codex_dir: str | None = None, since_days: int | None = None) -
     Sessions are single-model in practice (verified across all rollouts); tokens are
     attributed to the session's model.
     """
-    codex_dir = codex_dir or os.environ.get("CODEX_HOME") or os.path.expanduser("~/.codex")
+    codex_dir = os.path.expanduser(codex_dir or os.environ.get("CODEX_HOME") or "~/.codex")
     sessions_dir = os.path.join(codex_dir, "sessions")
     floor = ((datetime.now().astimezone() - timedelta(days=since_days)).strftime("%Y-%m-%d")
              if since_days is not None else None)

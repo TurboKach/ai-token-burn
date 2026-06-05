@@ -11,10 +11,14 @@ from datetime import datetime, timezone
 
 import engine
 
+# Default output sits next to this script (repo/data/stats.json), so a launchd job that
+# runs `python3 /path/to/collect.py` writes to the repo regardless of its working directory.
+_DEFAULT_OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "stats.json")
+
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--out", default="data/stats.json", help="output path")
+    ap.add_argument("--out", default=_DEFAULT_OUT, help="output path")
     ap.add_argument("--claude-dir", default=None, help="override ~/.claude")
     ap.add_argument("--codex-dir", default=None, help="override ~/.codex")
     args = ap.parse_args()

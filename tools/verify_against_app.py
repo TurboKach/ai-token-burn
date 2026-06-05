@@ -57,7 +57,7 @@ def build_oracle(workdir: str) -> str:
 
 
 def main() -> int:
-    claude_dir = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude")
+    claude_dir = os.path.expanduser(os.environ.get("CLAUDE_CONFIG_DIR") or "~/.claude")
     work = tempfile.mkdtemp(prefix="aitb-verify-")
     try:
         # Freeze the logs so the live-mutating files don't differ between the two reads.
