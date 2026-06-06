@@ -75,6 +75,9 @@ def _vars_block(appearance: dict, indent: str) -> str:
     lines = [f"{indent}{var}: {appearance[key]};" for key, var in _CSS_VARS]
     lines += [f"{indent}--l{i}: {c};" for i, c in enumerate(appearance["ramp"], 1)]
     lines.append(f"{indent}--shadow: {appearance['shadow']};")
+    # readable foreground for text/marks sitting on --accent (active controls);
+    # defaults to white so themes that omit it keep the original look.
+    lines.append(f"{indent}--on-accent: {appearance.get('onAccent', '#ffffff')};")
     return "\n".join(lines)
 
 

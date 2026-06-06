@@ -47,7 +47,7 @@ h1 { font-size: 26px; font-weight: 800; letter-spacing: .5px; margin: 0; text-tr
   text-transform: var(--ut); transition: background .12s, color .12s;
 }
 .seg button:hover { color: var(--text); }
-.seg button.on { background: var(--accent); color: #fff; }
+.seg button.on { background: var(--accent); color: var(--on-accent); }
 .toggle {
   display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
   font-size: 13px; font-weight: 600; color: var(--muted); user-select: none;
