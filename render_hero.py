@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
 from datetime import date, timedelta
 from html import escape
 
@@ -24,6 +25,19 @@ from themes import DEFAULT_THEME, load_theme, resolve_look
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 GATSBY_TOKENS = 62_000  # ~tokens in The Great Gatsby (mirrors the app's easter egg)
+
+# The 37-colour DOOM fire palette (coldest → hottest), shared with the dashboard's
+# live canvas flame in docs/flame.js. https://github.com/filipedeschamps/doom-fire-algorithm
+FIRE_PALETTE = [
+    (7, 7, 7), (31, 7, 7), (47, 15, 7), (71, 15, 7), (87, 23, 7), (103, 31, 7),
+    (119, 31, 7), (143, 39, 7), (159, 47, 7), (175, 63, 7), (191, 71, 7),
+    (199, 71, 7), (223, 79, 7), (223, 87, 7), (223, 87, 7), (215, 95, 7),
+    (215, 95, 7), (215, 103, 15), (207, 111, 15), (207, 119, 15), (207, 127, 15),
+    (207, 135, 23), (199, 135, 23), (199, 143, 23), (199, 151, 31), (191, 159, 31),
+    (191, 159, 31), (191, 167, 39), (191, 167, 39), (191, 175, 47), (183, 175, 47),
+    (183, 183, 47), (183, 183, 55), (207, 207, 111), (223, 223, 159),
+    (239, 239, 199), (255, 255, 255),
+]
 
 
 def _utc_label(minutes) -> str:
@@ -223,6 +237,56 @@ def make_bucketer(values):
 # --------------------------------------------------------------------------- #
 # SVG rendering
 # --------------------------------------------------------------------------- #
+def _flame_mark(px, py, scale, *, seed=7, W=12, H=16, warm=44, thresh=2):
+    """A single settled frame of the DOOM fire effect (the same algorithm as the
+    dashboard's live canvas, docs/flame.js), drawn as crisp pixel <rect>s so it
+    renders statically on GitHub — no <script>, no animation. The heat grid is
+    seeded along the bottom with a flame-shaped profile (hot centre, cold edges),
+    spread upward with random decay, then mapped through FIRE_PALETTE. Seeded RNG
+    keeps the frame identical across daily re-renders, so the asset diff stays
+    quiet. Near-cold pixels (intensity < thresh) are dropped so the flame reads
+    cleanly on both the light and dark cards."""
+    rnd = random.Random(seed)
+    mx = len(FIRE_PALETTE) - 1
+    fire = [0] * (W * H)
+    cx = (W - 1) / 2
+    edge = 0.62
+    src = [
+        0 if (abs(x - cx) / cx) > edge
+        else round(mx * (1 - (abs(x - cx) / cx / edge) ** 2))
+        for x in range(W)
+    ]
+    for _ in range(warm):
+        for x in range(W):
+            fire[(H - 1) * W + x] = src[x]
+        for x in range(W):
+            for y in range(1, H):
+                frm = y * W + x
+                inten = fire[frm]
+                if inten == 0:
+                    fire[frm - W] = 0
+                    continue
+                decay = rnd.randint(0, 2)          # fades upward so tongues taper
+                r = rnd.random()
+                drift = -1 if r < 0.16 else (1 if r > 0.84 else 0)
+                to = frm - W + drift
+                if to >= 0:
+                    fire[to] = max(0, inten - decay)
+    cells = []
+    for i, v in enumerate(fire):
+        if v < thresh:
+            continue
+        r, g, b = FIRE_PALETTE[v]
+        cells.append(
+            f'<rect x="{i % W}" y="{i // W}" width="1" height="1" '
+            f'fill="#{r:02x}{g:02x}{b:02x}"/>'
+        )
+    return (
+        f'<g transform="translate({px},{py}) scale({scale})" '
+        f'shape-rendering="crispEdges">{"".join(cells)}</g>'
+    )
+
+
 def _txt(x, y, s, size, fill, *, weight=400, anchor="start", spacing=None, opacity=None):
     extra = ""
     if weight != 400:
@@ -286,13 +350,9 @@ def render_svg(combined: dict, theme: dict, today: date) -> str:
 
     # ---- header ------------------------------------------------------------ #
     hy = 42
-    # flame mark
-    parts.append(
-        f'<g transform="translate({P},{hy-15})">'
-        f'<path d="M9 0 C13 5 7 6 10 12 C16 10 17 3 14 -1 '
-        f'C20 3 21 14 12 19 C4 19 1 12 5 6 C6 9 8 8 9 0 Z" '
-        f'fill="{t["accent"]}"/></g>'
-    )
+    # flame mark: a settled DOOM-fire frame (12x16 grid scaled 1.5x -> 18x24),
+    # sitting just left of the wordmark in the same spot as the old flame glyph.
+    parts.append(_flame_mark(P, hy - 20, 1.5, seed=16))
     parts.append(_txt(P + 26, hy, "TOKEN BURN", 21, t["text"], weight=800, spacing="1.5"))
     parts.append(
         _txt(W - P, hy - 4, "Claude Code + Codex", 13, t["muted"], anchor="end")
