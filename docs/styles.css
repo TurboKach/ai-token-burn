@@ -25,7 +25,17 @@ code { font: 12px/1 ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: 
   border-bottom: var(--border-width) solid var(--stroke);
 }
 .title { display: flex; align-items: center; gap: 10px; }
-.flame svg { fill: var(--accent); display: block; }
+
+/* 8-bit burning flame — a small canvas running the DOOM fire effect (see
+   flame.js). The backing store is the low-res heat grid; CSS upscales it with
+   pixelated rendering so the pixels stay crisp and chunky. */
+.flame {
+  display: block;
+  width: 36px;
+  height: 52px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
 h1 { font-size: 26px; font-weight: 800; letter-spacing: .5px; margin: 0; text-transform: var(--ut); }
 .masthead-meta { text-align: right; line-height: 1.3; }
 .combined { display: block; font-size: 20px; font-weight: 800; color: var(--accent); }
