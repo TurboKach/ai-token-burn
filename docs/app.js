@@ -32,6 +32,23 @@ function prettyModel(name) {
 }
 const hourLabel = h => h == null ? '—' : String(h).padStart(2, '0') + ':00';
 
+/* ---- timezone: hourCounts/peakHour are bucketed in the collector's local tz
+   (DATA.tzOffsetMinutes, minutes east of UTC). Rotate them to the viewer's own
+   timezone so everyone sees Active Hours in their local time. Whole-hour shift
+   (exact for whole-hour offsets; ±1 bucket only across DST/half-hour zones). */
+const VIEWER_TZ_MIN = -new Date().getTimezoneOffset();
+const tzLabel = (() => {
+  try {
+    return new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' })
+      .formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || '';
+  } catch (e) { return ''; }
+})();
+const hourShift = () => {
+  const src = (DATA && typeof DATA.tzOffsetMinutes === 'number') ? DATA.tzOffsetMinutes : VIEWER_TZ_MIN;
+  return Math.round((VIEWER_TZ_MIN - src) / 60);
+};
+const toViewerHour = h => h == null ? null : ((h + hourShift()) % 24 + 24) % 24;
+
 /* ---- date helpers (treat YYYY-MM-DD as UTC calendar days) -------------- */
 const parseDay = s => new Date(s + 'T00:00:00Z');
 const addDays = (d, n) => new Date(d.getTime() + n * 86400000);
@@ -125,7 +142,7 @@ function renderTiles(M) {
     { k: 'Active days', v: intc(M.activeDays) },
     { k: 'Current streak', v: M.cur + ' <small>days</small>' },
     { k: 'Longest streak', v: M.longest + ' <small>days</small>' },
-    { k: 'Peak hour', v: hourLabel(M.peakHour), x: 'all-time' },
+    { k: 'Peak hour', v: hourLabel(toViewerHour(M.peakHour)), x: tzLabel ? `all-time · ${tzLabel}` : 'all-time' },
     { k: 'Top model', v: esc(prettyModel(M.favorite)), x: esc(M.favorite || '') },
   ];
   const root = $('#tiles'); root.innerHTML = '';
@@ -217,15 +234,19 @@ function renderHeatmap(M) {
 function renderHours(tool) {
   const root = $('#hours'); root.innerHTML = '';
   const hc = DATA[tool].hourCounts || {};
-  const counts = Array.from({ length: 24 }, (_, h) => hc[h] || 0);
+  const shift = hourShift();
+  // h is the viewer-local hour; its count comes from the matching collector hour
+  const counts = Array.from({ length: 24 }, (_, h) => hc[((h - shift) % 24 + 24) % 24] || 0);
   const max = Math.max(1, ...counts);
-  const peak = DATA[tool].overview.peakHour;
+  const peak = toViewerHour(DATA[tool].overview.peakHour);
   counts.forEach((c, h) => {
     const b = el('div', 'hb' + (h === peak ? ' peak' : ''));
     b.style.height = Math.max(2, (c / max) * 100) + '%';
     b.dataset.tip = `<b>${hourLabel(h)}</b><br>${intc(c)} sessions started`;
     root.appendChild(b);
   });
+  const sub = $('#hours-sub');
+  if (sub) sub.textContent = 'session starts · all-time' + (tzLabel ? ` · ${tzLabel}` : '');
 }
 
 /* ---- tokens per day ---------------------------------------------------- */

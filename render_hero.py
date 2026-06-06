@@ -26,6 +26,17 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 GATSBY_TOKENS = 62_000  # ~tokens in The Great Gatsby (mirrors the app's easter egg)
 
 
+def _utc_label(minutes) -> str:
+    """Compact UTC offset for the static peak-hour label, e.g. 'UTC+8' / 'UTC-5:30'.
+    The hero is a fixed image, so it can't follow the viewer's timezone like the
+    dashboard does — it shows peak hour in the collector's zone, labeled."""
+    if minutes is None:
+        return ""
+    sign = "+" if minutes >= 0 else "-"
+    h, m = divmod(abs(int(minutes)), 60)
+    return f"UTC{sign}{h}" + (f":{m:02d}" if m else "")
+
+
 # --------------------------------------------------------------------------- #
 # combined data
 # --------------------------------------------------------------------------- #
@@ -75,6 +86,7 @@ def build_combined(stats: dict, today: date) -> dict:
         "currentStreak": cur_streak,
         "longestStreak": longest_streak,
         "peakHour": peak_hour,
+        "tzLabel": _utc_label(stats.get("tzOffsetMinutes")),
         "favoriteModel": favorite_model,
         "gatsby": combined_total / GATSBY_TOKENS,
         "dayTokens": day_tokens,
@@ -285,9 +297,10 @@ def render_svg(combined: dict, theme: dict, today: date) -> str:
     parts.append(
         _txt(W - P, hy - 4, "Claude Code + Codex", 13, t["muted"], anchor="end")
     )
-    parts.append(
-        _txt(W - P, hy + 11, "token burn-rate · all-time", 10.5, t["faint"], anchor="end")
-    )
+    subtitle = "token burn-rate · all-time"
+    if combined.get("tzLabel"):
+        subtitle += f' · times in {combined["tzLabel"]}'
+    parts.append(_txt(W - P, hy + 11, subtitle, 10.5, t["faint"], anchor="end"))
     parts.append(
         f'<line x1="{P}" y1="{hy+22}" x2="{W-P}" y2="{hy+22}" '
         f'stroke="{t["stroke"]}"{sw}/>'

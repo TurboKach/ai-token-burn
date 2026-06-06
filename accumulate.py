@@ -144,6 +144,7 @@ def merge_stats(old: dict | None, fresh: dict, today: date) -> dict:
         return fresh
     return {
         "generatedAt": fresh["generatedAt"],
+        "tzOffsetMinutes": fresh.get("tzOffsetMinutes"),
         "claude": _merge_tool(old.get("claude"), fresh["claude"], today),
         "codex": _merge_tool(old.get("codex"), fresh["codex"], today),
     }

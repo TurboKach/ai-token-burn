@@ -44,6 +44,10 @@ def main() -> None:
 
     fresh = {
         "generatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        # Minutes east of UTC of the machine that bucketed hourCounts/peakHour
+        # into local hours (engine.py uses .astimezone()). The dashboard rotates
+        # the hour histogram to the viewer's own timezone using this offset.
+        "tzOffsetMinutes": int(datetime.now().astimezone().utcoffset().total_seconds() // 60),
         "claude": engine.compute_claude(args.claude_dir),
         "codex": engine.compute_codex(args.codex_dir),
     }
