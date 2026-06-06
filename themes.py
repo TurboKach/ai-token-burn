@@ -78,6 +78,10 @@ def _vars_block(appearance: dict, indent: str) -> str:
     # readable foreground for text/marks sitting on --accent (active controls);
     # defaults to white so themes that omit it keep the original look.
     lines.append(f"{indent}--on-accent: {appearance.get('onAccent', '#ffffff')};")
+    # fill for whole data series (bar charts, model in-bars). Defaults to the
+    # accent so themes keep colored bars; monochrome themes set it to ink and
+    # reserve the accent for emphasis (the peak bar, headline, active controls).
+    lines.append(f"{indent}--bar: {appearance.get('bar', appearance['accent'])};")
     return "\n".join(lines)
 
 
