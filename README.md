@@ -86,6 +86,30 @@ python3 render_hero.py             # -> assets/overview-{light,dark}.svg
 
 A launchd agent (`tools/com.turbokach.aitokenburn.plist`) runs `publish.sh` daily.
 
+## Themes
+
+The dashboard and the README hero share one set of named color themes in
+`themes/<id>.json`. Each theme defines a **light + dark** appearance; the web
+dashboard switches between them automatically via `prefers-color-scheme`, and the
+hero is rendered to both `assets/overview-light.svg` and `assets/overview-dark.svg`.
+
+Built-in themes: **`monospace`** (the active default) and **`ember`**.
+
+To switch theme, regenerate the two outputs that bake it in:
+
+```bash
+python3 themes.py --theme ember        # -> docs/themes.css (dashboard CSS variables)
+python3 render_hero.py --theme ember   # -> assets/overview-{light,dark}.svg
+```
+
+Both renderers read `DEFAULT_THEME` in `themes.py` (currently `monospace`) when no
+`--theme` is given — change that constant to make a theme the permanent default so
+the daily publish job picks it up without flags.
+
+To add your own theme, drop a `themes/<id>.json` beside `ember.json` with the same
+shape — `{id, label, look?, light: {...}, dark: {...}}` — then point the commands
+above at your new `<id>`.
+
 ## Roadmap
 
 - [x] Validated Claude engine + Codex aggregator → `stats.json`

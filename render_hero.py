@@ -351,7 +351,7 @@ def render_svg(combined: dict, theme: dict, today: date) -> str:
     # flame mark: a settled DOOM-fire frame (12x16 grid scaled 1.5x -> 18x24),
     # sitting just left of the wordmark in the same spot as the old flame glyph.
     parts.append(_flame_mark(P, hy - 20, 1.5, seed=16))
-    parts.append(_txt(P + 26, hy, "TOKEN BURN", 21, t["text"], weight=800, spacing="1.5"))
+    parts.append(_txt(P + 26, hy, "TOKEN BURN STATS", 21, t["text"], weight=800, spacing="1.5"))
     parts.append(
         _txt(W - P, hy - 4, "Claude Code + Codex", 13, t["muted"], anchor="end")
     )
