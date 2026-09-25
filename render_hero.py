@@ -18,7 +18,7 @@ import argparse
 import json
 import os
 import random
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from html import escape
 
 from themes import DEFAULT_THEME, load_theme, resolve_look
@@ -140,8 +140,9 @@ def _streaks(active_dates: list[str], today: date) -> tuple[int, int]:
 def human_tokens(n: int) -> str:
     """255_628_000 -> '255.6M', 9_400 -> '9.4K', 940 -> '940'."""
     n = float(n)
+    # 0.99995 threshold: 999.95M rounds up, so it must print as '1.0B', not '1000.0M'
     for div, suffix in ((1e9, "B"), (1e6, "M"), (1e3, "K")):
-        if abs(n) >= div:
+        if abs(n) >= div * 0.99995:
             return f"{n / div:.1f}{suffix}"
     return f"{int(n)}"
 
@@ -485,36 +486,30 @@ def render_svg(combined: dict, theme: dict, today: date) -> str:
         r_right = rad(4) if i == len(combined["split"]) - 1 else 0
         parts.append(_rounded_seg(cx, bar_y, seg, bar_h, r_left, r_right, colors[s["tool"]]))
         cx += seg
-    # split labels (Claude left, Codex right)
+    # split labels: one row per tool (two rows side by side overflow the panel
+    # in monospace once the numbers grow)
     ly = bar_y + bar_h + 17
     for i, s in enumerate(combined["split"]):
         pct = 100 * s["tokens"] / total
-        if i == 0:
-            parts.append(
-                f'<rect x="{px}" y="{ly-9}" width="9" height="9" rx="{rad(2)}" fill="{colors[s["tool"]]}"/>'
-            )
-            parts.append(_txt(px + 13, ly,
-                              f'{s["tool"]}  {human_tokens(s["tokens"])} · {pct:.0f}%',
-                              11, t["text"]))
-        else:
-            parts.append(
-                f'<rect x="{px+pw-9:.1f}" y="{ly-9}" width="9" height="9" rx="{rad(2)}" fill="{colors[s["tool"]]}"/>'
-            )
-            parts.append(_txt(px + pw - 13, ly,
-                              f'{s["tool"]}  {human_tokens(s["tokens"])} · {pct:.0f}%',
-                              11, t["text"], anchor="end"))
+        y = ly + i * 17
+        parts.append(
+            f'<rect x="{px}" y="{y-9}" width="9" height="9" rx="{rad(2)}" fill="{colors[s["tool"]]}"/>'
+        )
+        parts.append(_txt(px + 13, y,
+                          f'{s["tool"]}  {human_tokens(s["tokens"])} · {pct:.0f}%',
+                          11, t["text"]))
 
     # hottest day callout
     if combined["hottestDate"]:
-        parts.append(_txt(px, 292, "HOTTEST DAY", 10, t["faint"], weight=700, spacing="0.6"))
+        parts.append(_txt(px, 306, "HOTTEST DAY", 10, t["faint"], weight=700, spacing="0.6"))
         parts.append(
-            _txt(px, 311,
+            _txt(px, 325,
                  f'{short_date(combined["hottestDate"])} — {human_tokens(combined["hottestTokens"])} tokens',
                  13, t["text"], weight=600)
         )
 
     # intensity legend (less -> more)
-    leg_y = 342
+    leg_y = 352
     parts.append(_txt(px, leg_y, up("Less"), 9.5, t["muted"]))
     lx = px + 28
     for c in [t["empty"]] + t["ramp"]:
@@ -576,9 +571,14 @@ def main() -> None:
         stats = json.load(f)
 
     # "today" = local date of the stats generation, so the heatmap/streak anchor
-    # matches when collect ran (mirrors the app's local-TZ behavior).
+    # matches when collect ran (mirrors the app's local-TZ behavior). generatedAt
+    # is UTC, so shift it by the collector's offset before taking the date.
     gen = stats.get("generatedAt", "")
-    today = date.fromisoformat(gen[:10]) if gen[:10] else date.today()
+    if gen:
+        utc = datetime.fromisoformat(gen.replace("Z", "+00:00"))
+        today = (utc + timedelta(minutes=stats.get("tzOffsetMinutes") or 0)).date()
+    else:
+        today = date.today()
 
     combined = build_combined(stats, today)
     if not combined["dayTokens"]:

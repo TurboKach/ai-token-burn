@@ -14,7 +14,8 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;'
 /* ---- formatting -------------------------------------------------------- */
 function humanTokens(n) {
   n = +n;
-  for (const [d, s] of [[1e9, 'B'], [1e6, 'M'], [1e3, 'K']]) if (Math.abs(n) >= d) return (n / d).toFixed(1) + s;
+  // 0.99995 threshold: 999.95M rounds up, so it must print as '1.0B', not '1000.0M'
+  for (const [d, s] of [[1e9, 'B'], [1e6, 'M'], [1e3, 'K']]) if (Math.abs(n) >= d * 0.99995) return (n / d).toFixed(1) + s;
   return String(Math.round(n));
 }
 const intc = n => (+n).toLocaleString('en-US');
@@ -222,6 +223,8 @@ function renderHeatmap(M) {
       root.appendChild(cell);
     }
   }
+  // when it overflows (narrow screens), open at the newest weeks like GitHub's calendar
+  root.parentElement.scrollLeft = root.parentElement.scrollWidth;
   // legend
   const lg = $('#legend'); lg.innerHTML = 'Less';
   for (let i = 0; i <= 4; i++) lg.appendChild(el('span', 'cell' + (i ? ' lvl-' + i : '')));
@@ -268,6 +271,7 @@ function renderBars(M) {
       + (d.subTokens ? `<br>${humanTokens(d.subTokens)} subagents` : '');
     root.appendChild(bar);
   }
+  root.scrollLeft = root.scrollWidth; // when it overflows, open at the newest day
 }
 
 /* ---- models ------------------------------------------------------------ */
