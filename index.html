@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Token Burn Stats · Claude Code + Codex</title>
+  <meta name="description" content="Token burn-rate dashboard for Claude Code + Codex usage.">
+  <link rel="stylesheet" href="themes.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="masthead">
+      <div class="title">
+        <canvas id="flame-canvas" class="flame" width="18" height="26" aria-hidden="true"></canvas>
+        <h1>Token&nbsp;Burn&nbsp;Stats</h1>
+      </div>
+      <div class="masthead-meta">
+        <span class="combined" id="combined-total">—</span>
+        <span class="generated" id="generated">loading…</span>
+      </div>
+    </header>
+
+    <div class="controls" role="toolbar" aria-label="Dashboard controls">
+      <div class="seg" id="seg-tool" data-state="tool" role="group" aria-label="Tool">
+        <button data-value="claude" class="on">Claude Code</button>
+        <button data-value="codex">Codex</button>
+      </div>
+      <div class="seg" id="seg-window" data-state="window" role="group" aria-label="Time window">
+        <button data-value="all" class="on">All</button>
+        <button data-value="30d">30d</button>
+        <button data-value="7d">7d</button>
+      </div>
+      <div class="seg" id="seg-view" data-state="view" role="group" aria-label="View">
+        <button data-value="overview" class="on">Overview</button>
+        <button data-value="models">Models</button>
+      </div>
+      <label class="toggle" id="sub-toggle" title="Subagent transcripts run by Claude Code. Their tokens are always counted (like the Claude app); toggle to also count their sessions &amp; messages.">
+        <input type="checkbox" id="sub-check">
+        <span>Subagents</span>
+      </label>
+    </div>
+
+    <main>
+      <section id="view-overview">
+        <div class="tiles" id="tiles"></div>
+
+        <div class="grid">
+          <div class="panel panel-wide">
+            <div class="panel-head"><h2>Daily burn</h2><span class="panel-sub" id="heatmap-sub"></span></div>
+            <div class="heatmap-scroll"><div id="heatmap" class="heatmap"></div></div>
+            <div class="legend" id="legend"></div>
+          </div>
+
+          <div class="panel panel-wide">
+            <div class="panel-head"><h2>Active hours</h2><span class="panel-sub" id="hours-sub">session starts · all-time</span></div>
+            <div id="hours" class="hours"></div>
+          </div>
+
+          <div class="panel panel-wide">
+            <div class="panel-head"><h2>Tokens per day</h2><span class="panel-sub" id="bars-sub"></span></div>
+            <div id="barchart" class="barchart"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-models" hidden>
+        <div class="panel">
+          <div class="panel-head"><h2>Models</h2><span class="panel-sub" id="models-sub"></span></div>
+          <div id="model-list" class="model-list"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <span id="foot-range">—</span>
+      <span>built from local <code>~/.claude</code> + <code>~/.codex</code> logs ·
+        <a href="https://github.com/TurboKach/ai-token-burn">source</a></span>
+    </footer>
+  </div>
+
+  <div id="tooltip" class="tooltip" hidden></div>
+  <script src="flame.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
