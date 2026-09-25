@@ -48,8 +48,9 @@ RAW="https://raw.githubusercontent.com/$SLUG/output/assets"
 cat <<EOF
 
 Next steps:
-  1. Publish once now (creates + pushes the 'output' branch):
-       $REPO/tools/publish.sh
+  1. Publish once now (creates + pushes the 'output' branch; --fresh starts your
+     history from zero — use --restore instead if this fork already has one):
+       $REPO/tools/publish.sh --fresh
   2. Enable GitHub Pages: Settings → Pages → Deploy from a branch → 'output', folder '/'.
      Or with the gh CLI:
        gh api -X POST repos/$SLUG/pages -f 'source[branch]=output' -f 'source[path]=/'

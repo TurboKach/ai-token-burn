@@ -22,9 +22,10 @@ via GitHub Pages). Nothing of anyone else's usage is ever merged into yours.
    ```
    It installs a launchd agent (`com.<your-user>.aitokenburn`) that runs `tools/publish.sh`
    from this checkout once a day, and prints the next steps with your owner/repo filled in.
-3. **Publish once** — creates and pushes your `output` branch:
+3. **Publish once** — creates and pushes your `output` branch, starting your history from
+   zero (`--fresh` is needed only this first time; the daily job then accumulates onto it):
    ```bash
-   tools/publish.sh
+   tools/publish.sh --fresh
    ```
 4. **Enable Pages**: Settings → Pages → Deploy from a branch → `output`, folder `/`
    (setup prints the equivalent `gh api` command). Your dashboard appears at
@@ -39,6 +40,11 @@ publish (it refuses if a local `data/stats.json` already exists, so it never ove
 ```bash
 tools/publish.sh --restore
 ```
+
+**Upgrading from an older version** (one that committed `data/stats.json` to the code
+branch)? Pulling this version deletes that file from your checkout, and publishing refuses
+to start over without it. Run `tools/publish.sh --restore` once after pulling — with no
+`output` branch yet, it recovers the file from your branch's git history.
 
 > **Why local?** Your real usage lives only in local logs. Claude Code (Max/Pro) and
 > Codex (ChatGPT) bill via subscription, and the Anthropic/OpenAI *usage APIs* only
