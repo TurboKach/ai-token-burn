@@ -18,6 +18,8 @@ import argparse
 import json
 import os
 import random
+import re
+import subprocess
 from datetime import date, datetime, timedelta
 from html import escape
 
@@ -302,7 +304,22 @@ def _txt(x, y, s, size, fill, *, weight=400, anchor="start", spacing=None, opaci
     )
 
 
-def render_svg(combined: dict, theme: dict, today: date) -> str:
+def pages_url() -> str | None:
+    """`<owner>.github.io/<repo>` derived from this checkout's `origin` remote, so a fork
+    links to its own dashboard. None when there is no origin or it isn't GitHub."""
+    try:
+        url = subprocess.run(["git", "-C", ROOT, "remote", "get-url", "origin"],
+                             capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    m = re.match(r"^(?:https://github\.com/|git@github\.com:|ssh://git@github\.com/)"
+                 r"([^/]+)/([^/]+?)(?:\.git)?/?$", url)
+    if not m:
+        return None
+    return f"{m.group(1).lower()}.github.io/{m.group(2)}"
+
+
+def render_svg(combined: dict, theme: dict, today: date, dashboard: str | None = None) -> str:
     t = theme
     look = t.get("look", {})
     FONT = look.get("svgFont") or (
@@ -527,10 +544,11 @@ def render_svg(combined: dict, theme: dict, today: date) -> str:
              f' → today  ·  {combined["activeDays"]} active days',
              10.5, t["faint"])
     )
-    parts.append(
-        _txt(W - P, fy, "interactive dashboard → turbokach.github.io/ai-token-burn",
-             10.5, t["faint"], anchor="end")
-    )
+    if dashboard:
+        parts.append(
+            _txt(W - P, fy, f"interactive dashboard → {dashboard}",
+                 10.5, t["faint"], anchor="end")
+        )
 
     parts.append("</svg>")
     return "\n".join(parts)
@@ -587,8 +605,9 @@ def main() -> None:
 
     out_dir = os.path.expanduser(args.out_dir)
     os.makedirs(out_dir, exist_ok=True)
+    dashboard = pages_url()
     for theme in theme_appearances(args.theme):
-        svg = render_svg(combined, theme, today)
+        svg = render_svg(combined, theme, today, dashboard)
         path = os.path.join(out_dir, f"overview-{theme['name']}.svg")
         tmp = path + ".tmp"
         with open(tmp, "w") as f:

@@ -1,19 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- Daily token-burn refresh. Install:
-       cp tools/com.turbokach.aitokenburn.plist ~/Library/LaunchAgents/
-       launchctl unload ~/Library/LaunchAgents/com.turbokach.aitokenburn.plist 2>/dev/null
-       launchctl load   ~/Library/LaunchAgents/com.turbokach.aitokenburn.plist
+<!-- Daily token-burn refresh. Template — tools/setup.sh fills the __PLACEHOLDERS__,
+     installs it to ~/Library/LaunchAgents/ and loads it.
      Runs once a day; if the Mac is asleep at the scheduled time, launchd fires it on wake. -->
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.turbokach.aitokenburn</string>
+  <string>__LABEL__</string>
 
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>/Users/turbokach/Dev/ai-token-burn/tools/publish.sh</string>
+    <string>__PUBLISH_SH__</string>
   </array>
 
   <!-- launchd's PATH is minimal; add Homebrew so git/python3 and
@@ -21,7 +19,7 @@
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key>
-    <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
   </dict>
 
   <key>StartCalendarInterval</key>
@@ -31,8 +29,8 @@
   </dict>
 
   <key>StandardOutPath</key>
-  <string>/Users/turbokach/Library/Logs/aitokenburn.log</string>
+  <string>__LOG__</string>
   <key>StandardErrorPath</key>
-  <string>/Users/turbokach/Library/Logs/aitokenburn.err.log</string>
+  <string>__ERR_LOG__</string>
 </dict>
 </plist>

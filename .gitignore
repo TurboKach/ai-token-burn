@@ -19,3 +19,10 @@ node_modules/
 # Local working notes — not for the public repo
 docs/prompts/
 .gstack/
+
+# Generated per-user data — lives on each fork's `output` branch, never on the code branch.
+# data/stats.json stays on disk locally: it is the accumulation state (see tools/publish.sh).
+data/
+docs/data/
+assets/
+.output/

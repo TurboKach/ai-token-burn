@@ -6,6 +6,40 @@ desktop app shows in its "What's up next" panel (sessions, messages, total token
 active days, streaks, peak hour, favorite model, per-model in/out, and the daily token
 heatmap) and extends them to Codex.
 
+## Use it for your own profile
+
+This repo ships **no stats** — only the code. Each user's numbers are generated on their
+own Mac and live on their own fork's **`output` branch** (which also serves the dashboard
+via GitHub Pages). Nothing of anyone else's usage is ever merged into yours.
+
+1. **Fork** this repo on GitHub, then clone *your fork*:
+   ```bash
+   git clone https://github.com/<you>/ai-token-burn.git && cd ai-token-burn
+   ```
+2. **Install the daily job** (macOS; `DRY_RUN=1` to preview):
+   ```bash
+   tools/setup.sh
+   ```
+   It installs a launchd agent (`com.<your-user>.aitokenburn`) that runs `tools/publish.sh`
+   from this checkout once a day, and prints the next steps with your owner/repo filled in.
+3. **Publish once** — creates and pushes your `output` branch:
+   ```bash
+   tools/publish.sh
+   ```
+4. **Enable Pages**: Settings → Pages → Deploy from a branch → `output`, folder `/`
+   (setup prints the equivalent `gh api` command). Your dashboard appears at
+   `https://<you>.github.io/ai-token-burn/`.
+5. **Paste the embed snippet** that `tools/setup.sh` printed into your profile README — a
+   `<picture>` of `raw.githubusercontent.com/<you>/ai-token-burn/output/assets/overview-{light,dark}.svg`
+   linking to your dashboard.
+
+**New machine?** Your accumulated history lives on `output`; pull it back before the first
+publish (it refuses if a local `data/stats.json` already exists, so it never overwrites):
+
+```bash
+tools/publish.sh --restore
+```
+
 > **Why local?** Your real usage lives only in local logs. Claude Code (Max/Pro) and
 > Codex (ChatGPT) bill via subscription, and the Anthropic/OpenAI *usage APIs* only
 > report API-key-billed usage — so a cloud job would render a graph of ~zero. The data
@@ -32,8 +66,8 @@ using Claude Code.
 
 Two independent things protect you going forward:
 
-1. **The graph** — `collect.py` **accumulates** (`accumulate.py`): each run merges with the
-   previously published `stats.json` (union of days; the higher-token row per day wins), so
+1. **The graph** — `collect.py` **accumulates** (`accumulate.py`): each run merges with your
+   local `data/stats.json` (union of days; the higher-token row per day wins), so
    once a day is captured it is never lost, even after its transcript is pruned. Run it at
    least once per retention window — the daily launchd job does — and the dashboard only
    ever grows. Trade-off: accumulated totals can **exceed** what the Claude app shows, since
@@ -81,10 +115,18 @@ app silently drops).
 python3 collect.py                 # -> data/stats.json (Claude + Codex), accumulating
 python3 collect.py --fresh         # full recompute, ignore the prior snapshot
 python3 render_hero.py             # -> assets/overview-{light,dark}.svg
-./tools/publish.sh                 # collect -> render -> commit + push (DRY_RUN=1 to preview)
+./tools/publish.sh                 # collect -> render -> commit to `output` + push (DRY_RUN=1 to preview)
+./tools/publish.sh --restore       # new machine: recreate data/stats.json from origin/output
 ```
 
-A launchd agent (`tools/com.turbokach.aitokenburn.plist`) runs `publish.sh` daily.
+`data/`, `docs/data/` and `assets/` are gitignored: the code branch never carries stats.
+`publish.sh` commits the dashboard (`docs/*`), `data/stats.json` and the hero SVGs to the
+`output` branch through a separate worktree at `.output/`, only when something changed —
+it never touches the branch you have checked out.
+
+`tools/setup.sh` fills `tools/aitokenburn.plist.template` for this checkout, installs it to
+`~/Library/LaunchAgents/` and (re)loads it, so launchd runs `publish.sh` daily at 10:00
+(logs in `~/Library/Logs/aitokenburn*.log`). Re-running it is safe.
 
 ## Themes
 
@@ -117,5 +159,5 @@ above at your new `<id>`.
 - [x] Cross-run accumulation so the graph survives log pruning (`accumulate.py`)
 - [x] Static hero SVG (combined Claude + Codex: tiles + burn heatmap + split bar), light/dark
 - [x] GitHub Pages dashboard: tabs (Claude ⇄ Codex) + All/30d/7d + Overview/Models + subagent toggle
-- [x] launchd job: daily `collect.py` → `render_hero.py` → commit + push
-- [Live dashboard →](https://turbokach.github.io/ai-token-burn/)
+- [x] launchd job: daily `collect.py` → `render_hero.py` → commit + push to `output`
+- Example: [the author's live dashboard →](https://turbokach.github.io/ai-token-burn/)
