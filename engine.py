@@ -163,6 +163,20 @@ def _new_model_bucket() -> dict:
     return {"inputTokens": 0, "outputTokens": 0, "cacheReadInputTokens": 0, "cacheCreationInputTokens": 0}
 
 
+def _day_detail(buckets: dict) -> dict:
+    """{model: bucket} -> the per-day `models`/`subModels` shape (in/out/cacheRead/cacheCreation)."""
+    return {m: {"in": v["inputTokens"], "out": v["outputTokens"],
+                "cacheRead": v["cacheReadInputTokens"], "cacheCreation": v["cacheCreationInputTokens"]}
+            for m, v in sorted(buckets.items())}
+
+
+def _add_usage(bucket: dict, i: int, o: int, cr: int, cc: int) -> None:
+    bucket["inputTokens"] += i
+    bucket["outputTokens"] += o
+    bucket["cacheReadInputTokens"] += cr
+    bucket["cacheCreationInputTokens"] += cc
+
+
 def _models_list(usage: dict) -> list[dict]:
     total = sum(v["inputTokens"] + v["outputTokens"] for v in usage.values()) or 1
     rows = [{
@@ -191,6 +205,9 @@ def compute_claude(claude_dir: str | None = None, since_days: int | None = None)
     daily_sub: dict[str, dict] = {}          # date -> {messages, sessions}  (subagent only)
     daily_model: dict[str, dict] = {}        # date -> {model: in+out}       (app-identical, incl subagent)
     daily_model_sub: dict[str, dict] = {}    # subagent-only
+    daily_hours: dict[str, dict] = {}        # date -> {hour: non-subagent session starts}
+    daily_usage: dict[str, dict] = {}        # date -> {model: bucket}  (incl subagent, like model_usage)
+    daily_usage_sub: dict[str, dict] = {}    # date -> {model: bucket}  (subagent only)
 
     for path in _claude_transcripts(projects):
         entries = _parse_jsonl(path, _CLAUDE_EXTRA_SPLIT)
@@ -222,6 +239,8 @@ def compute_claude(claude_dir: str | None = None, since_days: int | None = None)
             d["messages"] += len(kept)
             d["sessions"] += 1
             hour_counts[hour] = hour_counts.get(hour, 0) + 1
+            dh = daily_hours.setdefault(date, {})
+            dh[hour] = dh.get(hour, 0) + 1
             if first_ts is None or ts0 < first_ts:
                 first_ts = ts0
             if last_ts is None or ts0 > last_ts:
@@ -243,6 +262,7 @@ def compute_claude(claude_dir: str | None = None, since_days: int | None = None)
             bucket["outputTokens"] += o
             bucket["cacheReadInputTokens"] += cr
             bucket["cacheCreationInputTokens"] += cc
+            _add_usage(daily_usage.setdefault(date, {}).setdefault(model, _new_model_bucket()), i, o, cr, cc)
             burn = i + o
             if burn > 0:
                 daily_model.setdefault(date, {})
@@ -253,6 +273,7 @@ def compute_claude(claude_dir: str | None = None, since_days: int | None = None)
                 sb["outputTokens"] += o
                 sb["cacheReadInputTokens"] += cr
                 sb["cacheCreationInputTokens"] += cc
+                _add_usage(daily_usage_sub.setdefault(date, {}).setdefault(model, _new_model_bucket()), i, o, cr, cc)
                 if burn > 0:
                     daily_model_sub.setdefault(date, {})
                     daily_model_sub[date][model] = daily_model_sub[date].get(model, 0) + burn
@@ -272,6 +293,9 @@ def compute_claude(claude_dir: str | None = None, since_days: int | None = None)
         "subTokens": sum(daily_model_sub.get(d, {}).values()),
         "subMessages": daily_sub.get(d, {}).get("messages", 0),
         "subSessions": daily_sub.get(d, {}).get("sessions", 0),
+        "hours": {str(h): c for h, c in sorted(daily_hours.get(d, {}).items())},
+        "models": _day_detail(daily_usage.get(d, {})),
+        "subModels": _day_detail(daily_usage_sub.get(d, {})),
     } for d in all_dates]
 
     return {
@@ -324,6 +348,8 @@ def compute_codex(codex_dir: str | None = None, since_days: int | None = None) -
     model_usage: dict[str, dict] = {}
     daily: dict[str, dict] = {}
     daily_model: dict[str, dict] = {}
+    daily_hours: dict[str, dict] = {}        # date -> {hour: session starts}
+    daily_usage: dict[str, dict] = {}        # date -> {model: bucket}
 
     for path in _codex_rollouts(sessions_dir):
         entries = _parse_jsonl(path, None)  # standard JSONL — no U+2028/U+2029 splitting
@@ -370,6 +396,8 @@ def compute_codex(codex_dir: str | None = None, since_days: int | None = None) -
         d["sessions"] += 1
         d["messages"] += umsg + amsg
         hour_counts[hour] = hour_counts.get(hour, 0) + 1
+        dh = daily_hours.setdefault(date, {})
+        dh[hour] = dh.get(hour, 0) + 1
         if first_ts is None or sess_first < first_ts:
             first_ts = sess_first
         if last_ts is None or sess_first > last_ts:
@@ -383,6 +411,7 @@ def compute_codex(codex_dir: str | None = None, since_days: int | None = None) -
             bucket["inputTokens"] += in_nc
             bucket["outputTokens"] += out
             bucket["cacheReadInputTokens"] += cached
+            _add_usage(daily_usage.setdefault(date, {}).setdefault(model, _new_model_bucket()), in_nc, out, cached, 0)
             burn = in_nc + out
             if burn > 0:
                 daily_model.setdefault(date, {})
@@ -396,6 +425,8 @@ def compute_codex(codex_dir: str | None = None, since_days: int | None = None) -
         "byModel": daily_model.get(d, {}),
         "messages": daily.get(d, {}).get("messages", 0),
         "sessions": daily.get(d, {}).get("sessions", 0),
+        "hours": {str(h): c for h, c in sorted(daily_hours.get(d, {}).items())},
+        "models": _day_detail(daily_usage.get(d, {})),
     } for d in all_dates]
 
     return {
