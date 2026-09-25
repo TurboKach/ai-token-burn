@@ -163,8 +163,14 @@ function quartiles(values) {
   return v => v <= 0 ? 0 : v <= q[0] ? 1 : v <= q[1] ? 2 : v <= q[2] ? 3 : 4;
 }
 
+// Distance of a scroll container from its right (newest) edge. Read before a
+// re-render clears it, then restored after: the first render (empty box, 0)
+// opens at the newest day, a re-render keeps the user's position.
+const fromRight = sc => sc.scrollWidth - sc.clientWidth - sc.scrollLeft;
+const restoreFromRight = (sc, d) => { sc.scrollLeft = sc.scrollWidth - sc.clientWidth - d; };
+
 function renderHeatmap(M) {
-  const root = $('#heatmap'); root.innerHTML = '';
+  const root = $('#heatmap'), keep = fromRight(root.parentElement); root.innerHTML = '';
   const wd = M.wd;
   if (!wd.length) {
     // idle tool in this window: clear the subtitle + legend too, not just cells
@@ -224,7 +230,7 @@ function renderHeatmap(M) {
     }
   }
   // when it overflows (narrow screens), open at the newest weeks like GitHub's calendar
-  root.parentElement.scrollLeft = root.parentElement.scrollWidth;
+  restoreFromRight(root.parentElement, keep);
   // legend
   const lg = $('#legend'); lg.innerHTML = 'Less';
   for (let i = 0; i <= 4; i++) lg.appendChild(el('span', 'cell' + (i ? ' lvl-' + i : '')));
@@ -252,7 +258,7 @@ function renderHours(tool) {
 
 /* ---- tokens per day ---------------------------------------------------- */
 function renderBars(M) {
-  const root = $('#barchart'); root.innerHTML = '';
+  const root = $('#barchart'), keep = fromRight(root); root.innerHTML = '';
   const wd = M.wd;
   if (!wd.length) { $('#bars-sub').textContent = ''; return; }
   const max = Math.max(...wd.map(d => d.tokens));
@@ -271,7 +277,7 @@ function renderBars(M) {
       + (d.subTokens ? `<br>${humanTokens(d.subTokens)} subagents` : '');
     root.appendChild(bar);
   }
-  root.scrollLeft = root.scrollWidth; // when it overflows, open at the newest day
+  restoreFromRight(root, keep); // when it overflows, open at the newest day
 }
 
 /* ---- models ------------------------------------------------------------ */
