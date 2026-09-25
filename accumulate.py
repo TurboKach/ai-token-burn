@@ -90,7 +90,8 @@ def _compute_legacy(old_t, daily):
             legacy_hours[str(h)] = r
 
     # models: cache fields as a residual; in/out from the byModel tokens of rows that
-    # lack detail, split by the old in:out ratio so in+out == Σ byModel exactly.
+    # lack detail, split so in+out == Σ byModel exactly and neither field drops below
+    # the old snapshot's (closest point to the old in:out ratio; ratio if infeasible).
     detail = _sum_detail(daily, "models")
     legacy_models = _model_residual(old_t.get("models", []), detail)
     for f in ("in", "out"):
@@ -105,6 +106,11 @@ def _compute_legacy(old_t, daily):
     for m, total in undetailed.items():
         oi, oo = old_io.get(m, (0, 0))
         leg_in = total * oi // (oi + oo) if oi + oo else 0
+        det = detail.get(m, {})
+        lo = max(0, oi - det.get("in", 0))
+        hi = total - max(0, oo - det.get("out", 0))
+        if lo <= hi:
+            leg_in = min(max(leg_in, lo), hi)
         r = legacy_models.setdefault(m, dict.fromkeys(FIELDS, 0))
         r["in"], r["out"] = leg_in, total - leg_in
     legacy_models = {m: r for m, r in legacy_models.items() if any(r.values())}
@@ -114,7 +120,25 @@ def _compute_legacy(old_t, daily):
         legacy["hourCounts"] = legacy_hours
     if legacy_models:
         legacy["models"] = legacy_models
-    sub = _model_residual((old_t.get("subagents") or {}).get("models", []), _sum_detail(daily, "subModels"))
+    sub_detail = _sum_detail(daily, "subModels")
+    sub = _model_residual((old_t.get("subagents") or {}).get("models", []), sub_detail)
+    # sub-model totals must add up to Σ subTokens: spread a positive gap over the models
+    # in proportion to their totals (each share split by that model's own in:out ratio).
+    agg = {m: {f: sub.get(m, {}).get(f, 0) + sub_detail.get(m, {}).get(f, 0) for f in FIELDS}
+           for m in set(sub) | set(sub_detail)}
+    tot = {m: v["in"] + v["out"] for m, v in agg.items()}
+    gap = sum(d.get("subTokens", 0) for d in daily) - sum(tot.values())
+    if gap > 0 and sum(tot.values()) > 0:
+        shares = {m: gap * t // sum(tot.values()) for m, t in tot.items()}
+        shares[max(tot, key=lambda m: (tot[m], m))] += gap - sum(shares.values())
+        for m, g in shares.items():
+            if not g:
+                continue
+            a = agg[m]
+            g_in = g * a["in"] // (a["in"] + a["out"]) if a["in"] + a["out"] else 0
+            r = sub.setdefault(m, dict.fromkeys(FIELDS, 0))
+            r["in"] += g_in
+            r["out"] += g - g_in
     if sub:
         legacy["subModels"] = sub
     return legacy

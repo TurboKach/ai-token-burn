@@ -120,6 +120,7 @@ class InvariantMixin:
             if tool == "claude":
                 s = t["subagents"]
                 self.assertEqual(s["totalTokens"], sum(d["subTokens"] for d in daily))
+                self.assertEqual(sum(m["total"] for m in s["models"]), s["totalTokens"])
                 self.assertEqual(s["sessions"], sum(d["subSessions"] for d in daily))
                 self.assertEqual(s["messages"], sum(d["subMessages"] for d in daily))
 
@@ -220,10 +221,10 @@ class PreMigrationTest(InvariantMixin, unittest.TestCase):
         c = old["claude"]
         c["hourCounts"] = {"3": 4, "10": 1, "14": 1}          # drifted: Σ != sessions
         opus = next(m for m in c["models"] if m["model"] == "opus")
-        opus.update({"in": 250, "out": 60})                   # drifted: in+out != total (370)
+        opus.update({"in": 400, "out": 190})                  # drifted: in+out != total (370)
         c["subagents"]["totalTokens"] = 20                    # drifted below Σ subTokens (35)
-        c["subagents"]["models"] = [{"model": "haiku", "in": 40, "out": 12, "cacheRead": 9,
-                                     "cacheCreation": 0, "total": 52, "pct": 100.0}]
+        c["subagents"]["models"] = [{"model": "haiku", "in": 20, "out": 4, "cacheRead": 9,
+                                     "cacheCreation": 0, "total": 24, "pct": 100.0}]
         return old
 
     def test_legacy_computed_once_and_nothing_shrinks(self):
@@ -240,12 +241,14 @@ class PreMigrationTest(InvariantMixin, unittest.TestCase):
         leg = run1["claude"]["legacy"]
         # hours: old - Σ detail (detail rows D2,D3,D4 -> 10:2, 14:1, 9:1)
         self.assertEqual(leg["hourCounts"], {"3": 4})
-        # opus: D1 row lacks detail -> L = 150, split 250:60 -> in 120, out 30; cache 1000-500
-        self.assertEqual(leg["models"]["opus"], {"in": 120, "out": 30, "cacheRead": 500, "cacheCreation": 10})
+        # opus: D1 row lacks detail -> L = 150. The 400:190 ratio (in 101, out 49) would drop
+        # out to 99 < 190, so in is clamped into [0, 150-(190-50)] -> in 10, out 140; cache 1000-500
+        self.assertEqual(leg["models"]["opus"], {"in": 10, "out": 140, "cacheRead": 500, "cacheCreation": 10})
         # haiku (D1 subagent usage) -> L = 25, split by old 27:8 -> in 19, out 6
         self.assertEqual(leg["models"]["haiku"], {"in": 19, "out": 6, "cacheRead": 0, "cacheCreation": 0})
-        # subagent models: old 40/12/9 - Σ subModels (18/5/0)
-        self.assertEqual(leg["subModels"]["haiku"], {"in": 22, "out": 7, "cacheRead": 9, "cacheCreation": 0})
+        # subagent models: residual old 20/4/9 - Σ subModels (18/5/0) = 2/0/9 -> 20/5 = 25; gap to
+        # Σ subTokens (48) = 23, split by haiku's 20:5 ratio -> +18 in, +5 out
+        self.assertEqual(leg["subModels"]["haiku"], {"in": 20, "out": 5, "cacheRead": 9, "cacheCreation": 0})
         c = run1["claude"]
         self.assertEqual(c["hourCounts"], {"3": 4, "9": 1, "10": 2, "14": 1})
         self.assertEqual(c["subagents"]["totalTokens"], 48)
