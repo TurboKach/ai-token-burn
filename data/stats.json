@@ -1,29 +1,29 @@
 {
-  "generatedAt": "2026-11-06T02:00:01Z",
+  "generatedAt": "2026-11-07T02:00:05Z",
   "tzOffsetMinutes": 480,
   "claude": {
     "tool": "claude",
     "overview": {
-      "sessions": 3954,
-      "messages": 1089454,
-      "totalTokens": 1318242759,
-      "activeDays": 185,
+      "sessions": 3980,
+      "messages": 1099011,
+      "totalTokens": 1329840909,
+      "activeDays": 186,
       "peakHour": 16,
       "favoriteModel": "claude-opus-5-5",
       "firstSessionDate": "2026-04-25T08:17:59.359Z",
-      "lastSessionDate": "2026-11-06T01:58:39.030Z",
-      "currentStreak": 104,
-      "longestStreak": 104
+      "lastSessionDate": "2026-11-07T01:31:52.295Z",
+      "currentStreak": 105,
+      "longestStreak": 105
     },
     "models": [
       {
         "model": "claude-opus-5-5",
-        "in": 992834,
-        "out": 410039941,
-        "cacheRead": 120884731376,
-        "cacheCreation": 1888757914,
-        "total": 411032775,
-        "pct": 31.2
+        "in": 1004638,
+        "out": 415318834,
+        "cacheRead": 122424900922,
+        "cacheCreation": 1912135023,
+        "total": 416323472,
+        "pct": 31.3
       },
       {
         "model": "claude-opus-4-8",
@@ -32,7 +32,7 @@
         "cacheRead": 31257752407,
         "cacheCreation": 1479083650,
         "total": 378770223,
-        "pct": 28.7
+        "pct": 28.5
       },
       {
         "model": "claude-sonnet-5",
@@ -41,16 +41,16 @@
         "cacheRead": 40127445871,
         "cacheCreation": 1236694171,
         "total": 111646659,
-        "pct": 8.5
+        "pct": 8.4
       },
       {
         "model": "claude-sonnet-5-5",
-        "in": 511119,
-        "out": 94306241,
-        "cacheRead": 27316301430,
-        "cacheCreation": 1346872557,
-        "total": 94817360,
-        "pct": 7.2
+        "in": 518363,
+        "out": 100606450,
+        "cacheRead": 27741648015,
+        "cacheCreation": 1366498848,
+        "total": 101124813,
+        "pct": 7.6
       },
       {
         "model": "claude-opus-5",
@@ -59,7 +59,7 @@
         "cacheRead": 18993307931,
         "cacheCreation": 699732826,
         "total": 94406422,
-        "pct": 7.2
+        "pct": 7.1
       },
       {
         "model": "claude-opus-4-7",
@@ -68,7 +68,7 @@
         "cacheRead": 13217742765,
         "cacheCreation": 372150862,
         "total": 87936099,
-        "pct": 6.7
+        "pct": 6.6
       },
       {
         "model": "claude-fable-5",
@@ -86,7 +86,7 @@
         "cacheRead": 8533856543,
         "cacheCreation": 273529553,
         "total": 57622301,
-        "pct": 4.4
+        "pct": 4.3
       },
       {
         "model": "claude-haiku-4-5-20251001",
@@ -7164,40 +7164,95 @@
       },
       {
         "date": "2026-11-06",
-        "tokens": 2103623,
+        "tokens": 13510751,
         "byModel": {
-          "claude-opus-5-5": 1526384,
-          "claude-sonnet-5-5": 577239
+          "claude-opus-5-5": 6644688,
+          "claude-sonnet-5-5": 6866063
         },
-        "messages": 2886,
-        "sessions": 8,
-        "subTokens": 577239,
-        "subMessages": 1158,
-        "subSessions": 22,
+        "messages": 12138,
+        "sessions": 32,
+        "subTokens": 7208329,
+        "subMessages": 7576,
+        "subSessions": 135,
         "hours": {
           "8": 2,
-          "9": 6
+          "9": 6,
+          "10": 3,
+          "11": 1,
+          "13": 1,
+          "14": 1,
+          "16": 2,
+          "17": 2,
+          "18": 1,
+          "19": 1,
+          "20": 1,
+          "21": 8,
+          "23": 3
         },
         "models": {
           "claude-opus-5-5": {
-            "in": 3428,
-            "out": 1522956,
-            "cacheRead": 476327864,
-            "cacheCreation": 5846981
+            "in": 14882,
+            "out": 6629806,
+            "cacheRead": 1979278931,
+            "cacheCreation": 27849569
           },
           "claude-sonnet-5-5": {
-            "in": 1332,
-            "out": 575907,
-            "cacheRead": 81725810,
-            "cacheCreation": 4253901
+            "in": 8518,
+            "out": 6857545,
+            "cacheRead": 506081712,
+            "cacheCreation": 23721607
+          }
+        },
+        "subModels": {
+          "claude-opus-5-5": {
+            "in": 598,
+            "out": 341668,
+            "cacheRead": 34668087,
+            "cacheCreation": 808429
+          },
+          "claude-sonnet-5-5": {
+            "in": 8518,
+            "out": 6857545,
+            "cacheRead": 506081712,
+            "cacheCreation": 23721607
+          }
+        }
+      },
+      {
+        "date": "2026-11-07",
+        "tokens": 191022,
+        "byModel": {
+          "claude-opus-5-5": 172393,
+          "claude-sonnet-5-5": 18629
+        },
+        "messages": 305,
+        "sessions": 2,
+        "subTokens": 18629,
+        "subMessages": 52,
+        "subSessions": 2,
+        "hours": {
+          "9": 2
+        },
+        "models": {
+          "claude-opus-5-5": {
+            "in": 350,
+            "out": 172043,
+            "cacheRead": 37218479,
+            "cacheCreation": 1374521
+          },
+          "claude-sonnet-5-5": {
+            "in": 58,
+            "out": 18571,
+            "cacheRead": 990683,
+            "cacheCreation": 158585
           }
         },
         "subModels": {
           "claude-sonnet-5-5": {
-            "in": 1332,
-            "out": 575907,
-            "cacheRead": 81725810,
-            "cacheCreation": 4253901
+            "in": 58,
+            "out": 18571,
+            "cacheRead": 990683,
+            "cacheCreation": 158585
           }
         }
       }
@@ -7212,26 +7267,26 @@
       "6": 10,
       "7": 27,
       "8": 112,
-      "9": 236,
-      "10": 165,
-      "11": 204,
+      "9": 238,
+      "10": 168,
+      "11": 205,
       "12": 184,
-      "13": 217,
-      "14": 252,
+      "13": 218,
+      "14": 253,
       "15": 234,
-      "16": 256,
-      "17": 233,
-      "18": 219,
-      "19": 256,
-      "20": 243,
-      "21": 234,
+      "16": 258,
+      "17": 235,
+      "18": 220,
+      "19": 257,
+      "20": 244,
+      "21": 242,
       "22": 192,
-      "23": 242
+      "23": 245
     },
     "subagents": {
-      "sessions": 18095,
-      "messages": 1529091,
-      "totalTokens": 377682493,
+      "sessions": 18210,
+      "messages": 1535561,
+      "totalTokens": 384332212,
       "models": [
         {
           "model": "claude-sonnet-5",
@@ -7240,16 +7295,16 @@
           "cacheRead": 40125413995,
           "cacheCreation": 1235457064,
           "total": 105408560,
-          "pct": 27.9
+          "pct": 27.4
         },
         {
           "model": "claude-sonnet-5-5",
-          "in": 510551,
-          "out": 94194457,
-          "cacheRead": 27311527623,
-          "cacheCreation": 1345232446,
-          "total": 94705008,
-          "pct": 25.1
+          "in": 517795,
+          "out": 100494666,
+          "cacheRead": 27736874208,
+          "cacheCreation": 1364858737,
+          "total": 101012461,
+          "pct": 26.3
         },
         {
           "model": "claude-opus-4-8",
@@ -7258,16 +7313,16 @@
           "cacheRead": 5851140779,
           "cacheCreation": 579530932,
           "total": 79874254,
-          "pct": 21.1
+          "pct": 20.8
         },
         {
           "model": "claude-opus-5-5",
-          "in": 277472,
-          "out": 42057258,
-          "cacheRead": 19810246022,
-          "cacheCreation": 519671694,
-          "total": 42334730,
-          "pct": 11.2
+          "in": 278070,
+          "out": 42398926,
+          "cacheRead": 19844914109,
+          "cacheCreation": 520480123,
+          "total": 42676996,
+          "pct": 11.1
         },
         {
           "model": "claude-opus-5",
@@ -7276,7 +7331,7 @@
           "cacheRead": 7778271428,
           "cacheCreation": 446544437,
           "total": 33752987,
-          "pct": 8.9
+          "pct": 8.8
         },
         {
           "model": "claude-fable-5",
@@ -7285,7 +7340,7 @@
           "cacheRead": 1389528477,
           "cacheCreation": 109416224,
           "total": 11212273,
-          "pct": 3.0
+          "pct": 2.9
         },
         {
           "model": "claude-opus-4-7",
